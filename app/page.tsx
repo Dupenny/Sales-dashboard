@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import clsx from "clsx";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Chart,
   LineElement,
@@ -25,8 +24,391 @@ Chart.register(
   Legend,
 );
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap');
+  @import url('https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css');
 
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --obsidian: #0b0c10;
+    --surface: #111318;
+    --surface2: #181b22;
+    --surface3: #1f2330;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --gold: #c9a84c;
+    --gold2: #e8c87a;
+    --gold-dim: rgba(201,168,76,0.15);
+    --gold-glow: rgba(201,168,76,0.08);
+    --text-1: #f0ede6;
+    --text-2: #9e9a91;
+    --text-3: #5e5b54;
+    --accent: #5b7fff;
+    --accent-dim: rgba(91,127,255,0.12);
+    --success: #3dba7e;
+    --success-dim: rgba(61,186,126,0.12);
+    --warn: #e8a83c;
+    --warn-dim: rgba(232,168,60,0.12);
+    --danger: #e0534a;
+    --danger-dim: rgba(224,83,74,0.12);
+    --sidebar-w: 256px;
+    --topbar-h: 64px;
+    --radius: 14px;
+    --radius-sm: 8px;
+    --transition: all 0.25s cubic-bezier(.4,0,.2,1);
+  }
+
+  html, body, #root { height: 100%; background: var(--obsidian); color: var(--text-1); font-family: 'DM Sans', sans-serif; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+  /* ── SHELL ── */
+  .shell { display: flex; min-height: 100vh; background: var(--obsidian); }
+  .page-wrapper { flex: 1; display: flex; flex-direction: column; min-width: 0; margin-left: var(--sidebar-w); transition: margin-left 0.3s cubic-bezier(.4,0,.2,1); }
+  @media (max-width: 900px) { .page-wrapper { margin-left: 0; } }
+
+  /* ── OVERLAY ── */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px); z-index: 98; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+  .overlay.open { opacity: 1; pointer-events: all; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    z-index: 99;
+    overflow: hidden;
+    transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+  }
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-100%); box-shadow: none; }
+    .sidebar.open { transform: translateX(0); box-shadow: 20px 0 60px rgba(0,0,0,0.6); }
+  }
+
+  .sidebar-logo {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 20px;
+    height: var(--topbar-h);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo-mark {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: linear-gradient(135deg, #c9a84c 0%, #8c6a1f 100%);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-text { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 600; color: var(--text-1); letter-spacing: 0.01em; line-height: 1.2; }
+
+  .sidebar-scroll { flex: 1; overflow-y: auto; padding: 16px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .sidebar-label { font-size: 10px; font-weight: 600; color: var(--text-3); letter-spacing: 0.12em; text-transform: uppercase; padding: 12px 10px 6px; }
+  .sidebar-divider { height: 1px; background: var(--border); margin: 10px 0; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: var(--radius-sm);
+    border: none; background: transparent; cursor: pointer;
+    color: var(--text-2); font-size: 13.5px; font-weight: 400; font-family: 'DM Sans', sans-serif;
+    width: 100%; text-align: left;
+    transition: var(--transition);
+    position: relative;
+    letter-spacing: 0.01em;
+  }
+  .nav-item i { font-size: 17px; flex-shrink: 0; transition: color 0.2s; }
+  .nav-item:hover { background: var(--surface2); color: var(--text-1); }
+  .nav-item.active {
+    background: var(--gold-dim);
+    color: var(--gold2);
+    font-weight: 500;
+  }
+  .nav-item.active i { color: var(--gold); }
+  .nav-item.active::before {
+    content: '';
+    position: absolute; left: 0; top: 20%; height: 60%; width: 2.5px;
+    background: var(--gold);
+    border-radius: 0 2px 2px 0;
+  }
+
+  .sidebar-bottom { padding: 12px; flex-shrink: 0; border-top: 1px solid var(--border); }
+  .upgrade-card {
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    background: linear-gradient(135deg, #1a1508 0%, #0f1008 100%);
+    border: 1px solid rgba(201,168,76,0.2);
+    position: relative; overflow: hidden;
+  }
+  .upgrade-card::before {
+    content: '';
+    position: absolute; top: -30px; right: -30px;
+    width: 80px; height: 80px;
+    background: radial-gradient(circle, rgba(201,168,76,0.25) 0%, transparent 70%);
+  }
+  .upgrade-icon { font-size: 20px; color: var(--gold); margin-bottom: 8px; }
+  .upgrade-title { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 600; color: var(--gold2); margin-bottom: 5px; }
+  .upgrade-desc { font-size: 11.5px; color: var(--text-3); line-height: 1.5; margin-bottom: 12px; }
+  .upgrade-btn {
+    width: 100%; padding: 8px; border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, #c9a84c 0%, #8c6a1f 100%);
+    border: none; cursor: pointer;
+    font-size: 12px; font-weight: 600; font-family: 'DM Sans', sans-serif;
+    color: #0b0c10; letter-spacing: 0.04em;
+    transition: var(--transition);
+  }
+  .upgrade-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    height: var(--topbar-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 20px; flex-shrink: 0;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .menu-toggle {
+    display: none; background: none; border: none; cursor: pointer;
+    color: var(--text-2); font-size: 20px; padding: 4px;
+    border-radius: 6px; transition: var(--transition);
+    flex-shrink: 0;
+  }
+  .menu-toggle:hover { color: var(--text-1); background: var(--surface3); }
+  @media (max-width: 900px) { .menu-toggle { display: flex; align-items: center; } }
+
+  .search-wrap {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 0 12px; height: 36px;
+    transition: var(--transition); min-width: 0; flex: 1; max-width: 320px;
+  }
+  .search-wrap.focused { border-color: var(--border2); background: var(--surface3); }
+  .search-wrap i { color: var(--text-3); font-size: 15px; flex-shrink: 0; }
+  .search-wrap input { background: none; border: none; outline: none; color: var(--text-1); font-size: 13px; font-family: 'DM Sans', sans-serif; width: 100%; }
+  .search-wrap input::placeholder { color: var(--text-3); }
+  .kbd { font-size: 10px; color: var(--text-3); background: var(--surface3); border: 1px solid var(--border2); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; white-space: nowrap; }
+  @media (max-width: 480px) { .kbd { display: none; } }
+
+  .header-spacer { flex: 1; }
+
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+  .notif-btn {
+    width: 36px; height: 36px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; position: relative; transition: var(--transition); flex-shrink: 0;
+    color: var(--text-2);
+  }
+  .notif-btn:hover { border-color: var(--border2); color: var(--text-1); }
+  .notif-dot {
+    position: absolute; top: 7px; right: 7px; width: 6px; height: 6px;
+    background: var(--gold); border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+
+  .user-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 10px 4px 4px;
+    border-radius: 100px; cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    transition: var(--transition);
+  }
+  .user-pill:hover { border-color: var(--border2); }
+  .user-avatar-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+  .user-name { font-size: 12.5px; font-weight: 500; color: var(--text-1); white-space: nowrap; }
+  .user-email { font-size: 10.5px; color: var(--text-3); white-space: nowrap; display: none; }
+  .user-pill i { color: var(--text-3); flex-shrink: 0; }
+  @media (min-width: 600px) { .user-email { display: block; } }
+  @media (max-width: 480px) { .user-name { display: none; } }
+
+  /* ── MAIN ── */
+  .main { flex: 1; padding: 28px 24px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+  @media (max-width: 640px) { .main { padding: 20px 16px; gap: 18px; } }
+
+  /* ── PAGE HEADING ── */
+  .ov-heading { }
+  .ov-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 600; color: var(--text-1); letter-spacing: -0.01em; }
+  .ov-sub { font-size: 13.5px; color: var(--text-2); margin-top: 3px; }
+  @media (max-width: 640px) { .ov-title { font-size: 22px; } }
+
+  /* ── STAT CARDS ── */
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: var(--transition);
+    position: relative; overflow: hidden;
+  }
+  .stat-card::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border2), transparent);
+  }
+  .stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+  .stat-card.dark {
+    background: linear-gradient(135deg, #181408 0%, #0f1008 100%);
+    border-color: rgba(201,168,76,0.18);
+  }
+  .stat-card.dark:hover { border-color: rgba(201,168,76,0.35); }
+  .stat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .stat-label { font-size: 12px; font-weight: 500; color: var(--text-2); letter-spacing: 0.03em; text-transform: uppercase; }
+  .stat-icon-box {
+    width: 34px; height: 34px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-2); font-size: 16px;
+  }
+  .stat-icon-box.dark-icon { background: rgba(201,168,76,0.1); border-color: rgba(201,168,76,0.2); color: var(--gold); }
+  .stat-icon-box.round { border-radius: 50%; }
+  .stat-value { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 500; color: var(--text-1); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .stat-card.dark .stat-value { color: var(--gold2); }
+  .stat-change { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .change-pct { font-weight: 600; padding: 2px 7px; border-radius: 100px; font-size: 11px; }
+  .change-pct.up { color: var(--success); background: var(--success-dim); }
+  .change-pct.down { color: var(--danger); background: var(--danger-dim); }
+
+  /* ── DASH GRID ── */
+  .dash-grid { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+  @media (max-width: 1100px) { .dash-grid { grid-template-columns: 1fr 300px; } }
+  @media (max-width: 860px) { .dash-grid { grid-template-columns: 1fr; } }
+
+  /* ── CARDS ── */
+  .chart-card, .products-card, .orders-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 600; color: var(--text-1); letter-spacing: 0.01em; }
+  .card-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .legend-label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-2); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .more-btn { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 18px; padding: 3px; border-radius: 6px; transition: var(--transition); display: flex; }
+  .more-btn:hover { color: var(--text-1); background: var(--surface3); }
+
+  .chart-area { padding: 16px 20px 8px; height: 240px; }
+  @media (max-width: 640px) { .chart-area { height: 200px; } }
+
+  /* ── TOP PRODUCTS ── */
+  .products-card { }
+  .product-row {
+    display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    transition: var(--transition);
+  }
+  .product-row:last-child { border-bottom: none; }
+  .product-row:hover { background: var(--surface2); }
+  .product-img { width: 42px; height: 42px; border-radius: var(--radius-sm); object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; }
+  .product-info { flex: 1; min-width: 0; }
+  .product-name { font-size: 12.5px; font-weight: 500; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .product-sales { font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
+  .product-right { text-align: right; flex-shrink: 0; }
+  .avail-badge { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 100px; letter-spacing: 0.03em; }
+  .avail-badge.available { color: var(--success); background: var(--success-dim); }
+  .product-stock { font-size: 11px; color: var(--text-3); margin-top: 3px; }
+  .see-all-btn {
+    font-size: 12px; font-weight: 500; color: var(--gold);
+    background: none; border: none; cursor: pointer; padding: 4px 0;
+    transition: var(--transition);
+  }
+  .see-all-btn:hover { color: var(--gold2); }
+
+  /* ── TABLE ── */
+  .orders-card table { width: 100%; border-collapse: collapse; }
+  .orders-card th {
+    text-align: left; padding: 11px 20px;
+    font-size: 11px; font-weight: 600; color: var(--text-3);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .orders-card td { padding: 13px 20px; font-size: 13px; color: var(--text-1); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .orders-card tr:last-child td { border-bottom: none; }
+  .orders-card tbody tr { transition: background 0.15s; }
+  .orders-card tbody tr:hover { background: var(--surface2); }
+  .order-id { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-2); }
+
+  .table-wrap { overflow-x: auto; }
+
+  .table-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .btn-sm {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border-radius: var(--radius-sm);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-2); font-size: 12px; font-weight: 500; font-family: 'DM Sans', sans-serif;
+    cursor: pointer; transition: var(--transition); white-space: nowrap;
+  }
+  .btn-sm:hover { color: var(--text-1); border-color: var(--border2); background: var(--surface3); }
+
+  /* ── STATUS BADGES ── */
+  .status-txt { font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 100px; letter-spacing: 0.02em; }
+  .status-txt.delivered { color: var(--success); background: var(--success-dim); }
+  .status-txt.completed { color: var(--accent); background: var(--accent-dim); }
+  .status-txt.pending { color: var(--warn); background: var(--warn-dim); }
+  .status-txt.cancelled { color: var(--danger); background: var(--danger-dim); }
+
+  /* ── PLACEHOLDER ── */
+  .placeholder-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 64px 20px;
+    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;
+  }
+  .placeholder-icon { font-size: 40px; color: var(--gold); opacity: 0.5; }
+  .placeholder-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text-1); }
+  .placeholder-sub { font-size: 14px; color: var(--text-2); max-width: 340px; }
+
+  /* ── MOBILE TABLE SCROLL ── */
+  @media (max-width: 700px) {
+    .orders-card th, .orders-card td { padding: 11px 14px; }
+    .card-header { padding: 14px 16px 12px; }
+    .product-row { padding: 12px 16px; }
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .anim-in { animation: fadeSlideUp 0.4s cubic-bezier(.4,0,.2,1) both; }
+  .anim-in:nth-child(1) { animation-delay: 0ms; }
+  .anim-in:nth-child(2) { animation-delay: 60ms; }
+  .anim-in:nth-child(3) { animation-delay: 120ms; }
+  .anim-in:nth-child(4) { animation-delay: 180ms; }
+  .anim-in:nth-child(5) { animation-delay: 220ms; }
+
+  /* ── MOBILE BOTTOM NAV ── */
+  .mobile-bottom-nav {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 8px 0 env(safe-area-inset-bottom, 8px);
+  }
+  .mobile-bottom-nav-inner { display: flex; justify-content: space-around; align-items: center; }
+  .mob-nav-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: none; border: none; cursor: pointer; padding: 6px 10px;
+    color: var(--text-3); font-size: 10px; font-family: 'DM Sans', sans-serif;
+    transition: var(--transition); border-radius: var(--radius-sm);
+    font-weight: 500;
+  }
+  .mob-nav-btn i { font-size: 21px; }
+  .mob-nav-btn.active { color: var(--gold); }
+  .mob-nav-btn:hover { color: var(--text-1); }
+  @media (max-width: 600px) {
+    .mobile-bottom-nav { display: block; }
+    .main { padding-bottom: 80px; }
+  }
+`;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 type Page =
   | "overview"
   | "products"
@@ -39,7 +421,6 @@ type Page =
   | "help";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
-
 const CHART_LABELS = ["Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const REVENUE = [8200, 9400, 11800, 10200, 13500, 14800, 18900];
 const ORDERS_DATA = [5100, 6800, 8200, 7400, 9800, 11200, 15600];
@@ -218,7 +599,7 @@ const SHIPMENTS = [
     id: "#SHP-001",
     order: "#ORD-001",
     carrier: "DHL",
-    tracking: "1Z999AA10123456784",
+    tracking: "1Z999AA101234567",
     status: "Delivered",
     eta: "May 22",
   },
@@ -234,7 +615,7 @@ const SHIPMENTS = [
     id: "#SHP-003",
     order: "#ORD-003",
     carrier: "UPS",
-    tracking: "1Z9999999999999999",
+    tracking: "1Z9999999999",
     status: "In Transit",
     eta: "May 28",
   },
@@ -242,7 +623,7 @@ const SHIPMENTS = [
     id: "#SHP-004",
     order: "#ORD-004",
     carrier: "DHL",
-    tracking: "1Z111AA10123456780",
+    tracking: "1Z111AA1012",
     status: "Cancelled",
     eta: "—",
   },
@@ -279,11 +660,24 @@ const NAV_SETTINGS: { id: Page; icon: string; label: string }[] = [
   { id: "help", icon: "ti-help-circle", label: "Help & Support" },
 ];
 
-// ─── Header ───────────────────────────────────────────────────────────────────
+const MOB_NAV = NAV_MAIN.slice(0, 5);
 
+// ─── StatusBadge ──────────────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const cls =
+    status === "Delivered"
+      ? "delivered"
+      : status === "Completed" || status === "In Transit"
+        ? "completed"
+        : status === "Pending"
+          ? "pending"
+          : "cancelled";
+  return <span className={`status-txt ${cls}`}>{status}</span>;
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
 function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const [searchFocused, setSearchFocused] = useState(false);
-
   return (
     <header className="topbar">
       <button
@@ -292,36 +686,33 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
         aria-label="Toggle menu">
         <i className="ti ti-menu-2" />
       </button>
-
-      <div className={clsx("search-wrap", searchFocused && "focused")}>
+      <div className={`search-wrap${searchFocused ? " focused" : ""}`}>
         <i className="ti ti-search" />
         <input
           type="text"
-          placeholder="Search..."
+          placeholder="Search products, orders..."
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setSearchFocused(false)}
         />
         <span className="kbd">⌘K</span>
       </div>
-
       <div className="header-spacer" />
-
       <div className="topbar-right">
         <div className="notif-btn">
-          <i className="ti ti-bell" style={{ fontSize: 18 }} />
+          <i className="ti ti-bell" style={{ fontSize: 17 }} />
           <div className="notif-dot" />
         </div>
         <div className="user-pill">
           <img
             className="user-avatar-img"
             src="https://i.pravatar.cc/40?img=11"
-            alt="Cooper Vaccaro"
+            alt="User"
           />
           <div>
             <div className="user-name">Abosede's Jewel</div>
             <div className="user-email">ajewel@gmail.com</div>
           </div>
-          <i className="ti ti-chevron-down" style={{ fontSize: 14 }} />
+          <i className="ti ti-chevron-down" style={{ fontSize: 13 }} />
         </div>
       </div>
     </header>
@@ -329,7 +720,6 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
 }
 
 // ─── Sidebar ─────────────────────────────────────────────────────────────────
-
 function Sidebar({
   open,
   onClose,
@@ -339,64 +729,67 @@ function Sidebar({
   open: boolean;
   onClose: () => void;
   activePage: Page;
-  onNavigate: (page: Page) => void;
+  onNavigate: (p: Page) => void;
 }) {
   function handleNav(page: Page) {
     onNavigate(page);
     onClose();
   }
-
   return (
     <>
-      <div className={clsx("overlay", open && "open")} onClick={onClose} />
-      <nav className={clsx("sidebar", open && "open")}>
+      <div className={`overlay${open ? " open" : ""}`} onClick={onClose} />
+      <nav className={`sidebar${open ? " open" : ""}`}>
         <div className="sidebar-logo">
           <div className="logo-mark">
-            <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+            <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
               <rect x="3" y="3" width="9" height="9" rx="2.5" fill="white" />
               <rect x="13" y="3" width="8" height="8" rx="2" fill="white" />
               <rect x="3" y="13" width="8" height="8" rx="2" fill="white" />
-              <rect x="13" y="13" width="8" height="8" rx="2" fill="#a78bfa" />
+              <rect
+                x="13"
+                y="13"
+                width="8"
+                height="8"
+                rx="2"
+                fill="rgba(0,0,0,0.4)"
+              />
             </svg>
           </div>
           <span className="logo-text">Abosede's Jewel</span>
         </div>
-
-        {NAV_MAIN.map(({ id, icon, label }) => (
-          <button
-            key={id}
-            onClick={() => handleNav(id)}
-            className={clsx("nav-item", activePage === id && "active")}>
-            <i className={`ti ${icon}`} />
-            <span>{label}</span>
-          </button>
-        ))}
-
-        <div className="sidebar-divider" />
-
-        {NAV_SETTINGS.map(({ id, icon, label }) => (
-          <button
-            key={id}
-            onClick={() => handleNav(id)}
-            className={clsx("nav-item", activePage === id && "active")}>
-            <i className={`ti ${icon}`} />
-            <span>{label}</span>
-          </button>
-        ))}
-
+        <div className="sidebar-scroll">
+          <div className="sidebar-label">Main Menu</div>
+          {NAV_MAIN.map(({ id, icon, label }) => (
+            <button
+              key={id}
+              onClick={() => handleNav(id)}
+              className={`nav-item${activePage === id ? " active" : ""}`}>
+              <i className={`ti ${icon}`} />
+              <span>{label}</span>
+            </button>
+          ))}
+          <div className="sidebar-divider" />
+          <div className="sidebar-label">Settings</div>
+          {NAV_SETTINGS.map(({ id, icon, label }) => (
+            <button
+              key={id}
+              onClick={() => handleNav(id)}
+              className={`nav-item${activePage === id ? " active" : ""}`}>
+              <i className={`ti ${icon}`} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
         <div className="sidebar-bottom">
           <div className="upgrade-card">
             <div className="upgrade-icon">
-              <i
-                className="ti ti-sparkles"
-                style={{ color: "#fff", fontSize: 20 }}
-              />
+              <i className="ti ti-sparkles" />
             </div>
-            <div className="upgrade-title">Upgrade Pro</div>
+            <div className="upgrade-title">Upgrade to Pro</div>
             <div className="upgrade-desc">
-              Discover new features to detailed report and analysis
+              Unlock detailed analytics, reports & premium integrations.
             </div>
-            <button className="upgrade-btn">Upgrade Now</button>
+            <button className="upgrade-btn">Upgrade Now →</button>
           </div>
         </div>
       </nav>
@@ -405,11 +798,9 @@ function Sidebar({
 }
 
 // ─── SalesChart ───────────────────────────────────────────────────────────────
-
 function SalesChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
-
   useEffect(() => {
     if (!canvasRef.current) return;
     chartRef.current?.destroy();
@@ -421,25 +812,45 @@ function SalesChart() {
           {
             label: "Revenue",
             data: REVENUE,
-            borderColor: "#5b5bd6",
-            backgroundColor: "rgba(91,91,214,0.10)",
+            borderColor: "#c9a84c",
+            backgroundColor: (ctx) => {
+              const gradient = ctx.chart.ctx.createLinearGradient(
+                0,
+                0,
+                0,
+                ctx.chart.height,
+              );
+              gradient.addColorStop(0, "rgba(201,168,76,0.2)");
+              gradient.addColorStop(1, "rgba(201,168,76,0)");
+              return gradient;
+            },
             fill: true,
             tension: 0.45,
             pointRadius: 0,
             pointHoverRadius: 5,
-            pointHoverBackgroundColor: "#5b5bd6",
+            pointHoverBackgroundColor: "#c9a84c",
             borderWidth: 2,
           },
           {
-            label: "Order",
+            label: "Orders",
             data: ORDERS_DATA,
-            borderColor: "#93c5fd",
-            backgroundColor: "rgba(147,197,253,0.10)",
+            borderColor: "#5b7fff",
+            backgroundColor: (ctx) => {
+              const gradient = ctx.chart.ctx.createLinearGradient(
+                0,
+                0,
+                0,
+                ctx.chart.height,
+              );
+              gradient.addColorStop(0, "rgba(91,127,255,0.15)");
+              gradient.addColorStop(1, "rgba(91,127,255,0)");
+              return gradient;
+            },
             fill: true,
             tension: 0.45,
             pointRadius: 0,
             pointHoverRadius: 5,
-            pointHoverBackgroundColor: "#93c5fd",
+            pointHoverBackgroundColor: "#5b7fff",
             borderWidth: 2,
           },
         ],
@@ -451,27 +862,29 @@ function SalesChart() {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: "#1a1a1a",
-            titleColor: "#888",
-            bodyColor: "#fff",
+            backgroundColor: "#181b22",
+            titleColor: "#9e9a91",
+            bodyColor: "#f0ede6",
+            borderColor: "rgba(255,255,255,0.08)",
+            borderWidth: 1,
             padding: 12,
-            cornerRadius: 8,
+            cornerRadius: 10,
             callbacks: {
-              title: (items) => `Average\n· ${items[0].label} 2023`,
               label: (ctx) =>
-                `· ${ctx.label} 2023   $${Number(ctx.raw).toLocaleString()}`,
+                ` ${ctx.dataset.label}  $${Number(ctx.raw).toLocaleString()}`,
             },
           },
         },
         scales: {
           x: {
             grid: { display: false },
-            ticks: { color: "#9e9e9a", font: { size: 11 } },
+            ticks: { color: "#5e5b54", font: { size: 11 } },
+            border: { display: false },
           },
           y: {
-            grid: { color: "rgba(0,0,0,.05)" },
+            grid: { color: "rgba(255,255,255,0.04)" },
             ticks: {
-              color: "#9e9e9a",
+              color: "#5e5b54",
               font: { size: 11 },
               callback: (v) => "$" + (Number(v) / 1000).toFixed(0) + "K",
             },
@@ -482,19 +895,18 @@ function SalesChart() {
     });
     return () => chartRef.current?.destroy();
   }, []);
-
   return (
     <div className="chart-card">
       <div className="card-header">
         <span className="card-title">Sales Overtime</span>
         <div className="card-actions">
           <span className="legend-label">
-            <span className="legend-dot" style={{ background: "#5b5bd6" }} />
+            <span className="legend-dot" style={{ background: "#c9a84c" }} />
             Revenue
           </span>
           <span className="legend-label">
-            <span className="legend-dot" style={{ background: "#93c5fd" }} />
-            Order
+            <span className="legend-dot" style={{ background: "#5b7fff" }} />
+            Orders
           </span>
           <button className="more-btn">
             <i className="ti ti-dots" />
@@ -502,70 +914,67 @@ function SalesChart() {
         </div>
       </div>
       <div className="chart-area">
-        <canvas ref={canvasRef} role="img" aria-label="Sales chart" />
+        <canvas ref={canvasRef} />
       </div>
     </div>
   );
 }
 
-// ─── Page sections ────────────────────────────────────────────────────────────
-
+// ─── Sections ─────────────────────────────────────────────────────────────────
 function OverviewSection() {
   return (
     <>
-      {/* Page heading inside content area */}
-      <div className="ov-heading">
-        <h1 className="ov-title">Welcome back, Blessing!</h1>
-        <p className="ov-sub">Here&apos;s you current sales overview</p>
+      <div className="ov-heading anim-in">
+        <h1 className="ov-title">Welcome back, Blessing ✦</h1>
+        <p className="ov-sub">Here's your current sales overview</p>
       </div>
-
-      {/* Stat cards */}
       <div className="stats-row">
-        <div className="stat-card dark">
-          <div className="stat-top">
-            <div className="stat-label">Avg. Order Value</div>
-            <div className="stat-icon-box dark-icon">
-              <i className="ti ti-database" />
+        {[
+          {
+            dark: true,
+            label: "Avg. Order Value",
+            icon: "ti-database",
+            value: "$72.98",
+            pct: "+3.16%",
+            sub: "from last month",
+          },
+          {
+            dark: false,
+            label: "Total Orders",
+            icon: "ti-receipt",
+            value: "$2,219",
+            pct: "+1.18%",
+            sub: "from last month",
+          },
+          {
+            dark: false,
+            label: "Lifetime Value",
+            icon: "ti-coin",
+            value: "$560",
+            pct: "+2.42%",
+            sub: "from last month",
+          },
+        ].map((c, i) => (
+          <div key={i} className={`stat-card${c.dark ? " dark" : ""} anim-in`}>
+            <div className="stat-top">
+              <div className="stat-label">{c.label}</div>
+              <div className={`stat-icon-box${c.dark ? " dark-icon" : ""}`}>
+                <i className={`ti ${c.icon}`} />
+              </div>
+            </div>
+            <div className="stat-value">{c.value}</div>
+            <div className="stat-change">
+              <span className="change-pct up">{c.pct}</span> {c.sub}
             </div>
           </div>
-          <div className="stat-value">$72.98</div>
-          <div className="stat-change">
-            <span className="change-pct up">+3.16%</span> from last month
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-top">
-            <div className="stat-label">Total Orders</div>
-            <div className="stat-icon-box">
-              <i className="ti ti-receipt" />
-            </div>
-          </div>
-          <div className="stat-value">$2,219</div>
-          <div className="stat-change">
-            <span className="change-pct up">+1.18%</span> from last month
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-top">
-            <div className="stat-label">Lifetime Value</div>
-            <div className="stat-icon-box round">
-              <i className="ti ti-coin" />
-            </div>
-          </div>
-          <div className="stat-value">$560</div>
-          <div className="stat-change">
-            <span className="change-pct up">+2.42%</span> from last month
-          </div>
-        </div>
+        ))}
       </div>
-
-      {/* Chart + Top Selling Product */}
-      <div className="dash-grid">
+      <div className="dash-grid anim-in">
         <SalesChart />
         <div className="products-card">
           <div className="card-header">
-            <span className="card-title">Top Selling Product</span>
-            <button className="see-all-btn">See All Product</button>
+            <span className="card-title">Top Selling</span>
+            <button className="see-all-btn">See All →</button>
           </div>
           {TOP_PRODUCTS.map((p) => (
             <div key={p.name} className="product-row">
@@ -576,8 +985,8 @@ function OverviewSection() {
               </div>
               <div className="product-right">
                 <div
-                  className={clsx("avail-badge", p.available && "available")}>
-                  {p.available ? "+ Available" : "Out of Stock"}
+                  className={`avail-badge${p.available ? " available" : ""}`}>
+                  {p.available ? "● Available" : "Out of Stock"}
                 </div>
                 <div className="product-stock">{p.stock}</div>
               </div>
@@ -585,9 +994,7 @@ function OverviewSection() {
           ))}
         </div>
       </div>
-
-      {/* Latest Orders */}
-      <div className="orders-card">
+      <div className="orders-card anim-in">
         <div className="card-header">
           <span className="card-title">Latest Orders</span>
           <div className="table-actions">
@@ -603,50 +1010,40 @@ function OverviewSection() {
             </button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Order ID</th>
-              <th>Product</th>
-              <th>Order Date</th>
-              <th>Price</th>
-              <th>Payment</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ORDERS.map((o) => (
-              <tr key={o.id}>
-                <td className="order-id">{o.id}</td>
-                <td>{o.product}</td>
-                <td style={{ color: "#9e9e9a" }}>{o.date}</td>
-                <td>{o.price}</td>
-                <td>{o.payment}</td>
-                <td>
-                  <span
-                    className={clsx(
-                      "status-txt",
-                      o.status === "Delivered"
-                        ? "delivered"
-                        : o.status === "Completed"
-                          ? "completed"
-                          : o.status === "Pending"
-                            ? "pending"
-                            : "cancelled",
-                    )}>
-                    {o.status}
-                  </span>
-                </td>
-                <td>
-                  <button className="more-btn">
-                    <i className="ti ti-dots" />
-                  </button>
-                </td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Product</th>
+                <th>Date</th>
+                <th>Price</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ORDERS.map((o) => (
+                <tr key={o.id}>
+                  <td className="order-id">{o.id}</td>
+                  <td>{o.product}</td>
+                  <td style={{ color: "var(--text-2)" }}>{o.date}</td>
+                  <td style={{ fontWeight: 500 }}>{o.price}</td>
+                  <td>{o.payment}</td>
+                  <td>
+                    <StatusBadge status={o.status} />
+                  </td>
+                  <td>
+                    <button className="more-btn">
+                      <i className="ti ti-dots" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -655,11 +1052,11 @@ function OverviewSection() {
 function ProductsSection() {
   return (
     <>
-      <div className="ov-heading">
+      <div className="ov-heading anim-in">
         <h1 className="ov-title">Products</h1>
         <p className="ov-sub">Manage your product catalogue</p>
       </div>
-      <div className="orders-card">
+      <div className="orders-card anim-in">
         <div className="card-header">
           <span className="card-title">All Products</span>
           <div className="table-actions">
@@ -674,42 +1071,44 @@ function ProductsSection() {
             </button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>SKU</th>
-              <th>Category</th>
-              <th>Price</th>
-              <th>Stock</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {PRODUCTS_LIST.map((p) => (
-              <tr key={p.sku}>
-                <td>{p.name}</td>
-                <td style={{ color: "#9e9e9a" }}>{p.sku}</td>
-                <td>{p.category}</td>
-                <td>{p.price}</td>
-                <td>{p.stock}</td>
-                <td>
-                  <span
-                    className={clsx(
-                      "status-txt",
-                      p.status === "In Stock"
-                        ? "delivered"
-                        : p.status === "Low Stock"
-                          ? "pending"
-                          : "cancelled",
-                    )}>
-                    {p.status}
-                  </span>
-                </td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>SKU</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {PRODUCTS_LIST.map((p) => (
+                <tr key={p.sku}>
+                  <td style={{ fontWeight: 500 }}>{p.name}</td>
+                  <td
+                    style={{
+                      color: "var(--text-2)",
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                    }}>
+                    {p.sku}
+                  </td>
+                  <td>{p.category}</td>
+                  <td>{p.price}</td>
+                  <td>{p.stock}</td>
+                  <td>
+                    <span
+                      className={`status-txt ${p.status === "In Stock" ? "delivered" : p.status === "Low Stock" ? "pending" : "cancelled"}`}>
+                      {p.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -718,49 +1117,52 @@ function ProductsSection() {
 function CustomerSection() {
   return (
     <>
-      <div className="ov-heading">
+      <div className="ov-heading anim-in">
         <h1 className="ov-title">Customers</h1>
         <p className="ov-sub">View and manage your customer base</p>
       </div>
       <div className="stats-row">
-        <div className="stat-card">
-          <div className="stat-top">
-            <div className="stat-label">Total Customers</div>
-            <div className="stat-icon-box">
-              <i className="ti ti-users" />
+        {[
+          {
+            label: "Total Customers",
+            icon: "ti-users",
+            value: "6",
+            pct: "+4",
+            sub: "this month",
+            dark: false,
+          },
+          {
+            label: "Active",
+            icon: "ti-user-check",
+            value: "4",
+            pct: "66.7%",
+            sub: "of total",
+            dark: false,
+          },
+          {
+            label: "Inactive",
+            icon: "ti-user-off",
+            value: "2",
+            pct: "33.3%",
+            sub: "of total",
+            dark: true,
+          },
+        ].map((c, i) => (
+          <div key={i} className={`stat-card${c.dark ? " dark" : ""} anim-in`}>
+            <div className="stat-top">
+              <div className="stat-label">{c.label}</div>
+              <div className={`stat-icon-box${c.dark ? " dark-icon" : ""}`}>
+                <i className={`ti ${c.icon}`} />
+              </div>
+            </div>
+            <div className="stat-value">{c.value}</div>
+            <div className="stat-change">
+              <span className="change-pct up">{c.pct}</span> {c.sub}
             </div>
           </div>
-          <div className="stat-value">6</div>
-          <div className="stat-change">
-            <span className="change-pct up">+4</span> this month
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-top">
-            <div className="stat-label">Active</div>
-            <div className="stat-icon-box">
-              <i className="ti ti-user-check" />
-            </div>
-          </div>
-          <div className="stat-value">4</div>
-          <div className="stat-change">
-            <span className="change-pct up">66.7%</span> of total
-          </div>
-        </div>
-        <div className="stat-card dark">
-          <div className="stat-top">
-            <div className="stat-label">Inactive</div>
-            <div className="stat-icon-box dark-icon">
-              <i className="ti ti-user-off" />
-            </div>
-          </div>
-          <div className="stat-value">2</div>
-          <div className="stat-change" style={{ color: "#888" }}>
-            33.3% of total
-          </div>
-        </div>
+        ))}
       </div>
-      <div className="orders-card">
+      <div className="orders-card anim-in">
         <div className="card-header">
           <span className="card-title">All Customers</span>
           <div className="table-actions">
@@ -772,38 +1174,37 @@ function CustomerSection() {
             </button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Orders</th>
-              <th>Total Spent</th>
-              <th>Joined</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {CUSTOMERS.map((c) => (
-              <tr key={c.email}>
-                <td>{c.name}</td>
-                <td style={{ color: "#9e9e9a" }}>{c.email}</td>
-                <td>{c.orders}</td>
-                <td>{c.spent}</td>
-                <td>{c.joined}</td>
-                <td>
-                  <span
-                    className={clsx(
-                      "status-txt",
-                      c.status === "Active" ? "delivered" : "cancelled",
-                    )}>
-                    {c.status}
-                  </span>
-                </td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Orders</th>
+                <th>Spent</th>
+                <th>Joined</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {CUSTOMERS.map((c) => (
+                <tr key={c.email}>
+                  <td style={{ fontWeight: 500 }}>{c.name}</td>
+                  <td style={{ color: "var(--text-2)" }}>{c.email}</td>
+                  <td>{c.orders}</td>
+                  <td>{c.spent}</td>
+                  <td>{c.joined}</td>
+                  <td>
+                    <span
+                      className={`status-txt ${c.status === "Active" ? "delivered" : "cancelled"}`}>
+                      {c.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -812,49 +1213,52 @@ function CustomerSection() {
 function OrdersSection() {
   return (
     <>
-      <div className="ov-heading">
+      <div className="ov-heading anim-in">
         <h1 className="ov-title">Orders</h1>
         <p className="ov-sub">Track and manage all customer orders</p>
       </div>
       <div className="stats-row">
-        <div className="stat-card">
-          <div className="stat-top">
-            <div className="stat-label">Total Orders</div>
-            <div className="stat-icon-box">
-              <i className="ti ti-shopping-bag" />
+        {[
+          {
+            label: "Total Orders",
+            icon: "ti-shopping-bag",
+            value: "6",
+            pct: "+1.18%",
+            sub: "from last month",
+            dark: false,
+          },
+          {
+            label: "Completed",
+            icon: "ti-check",
+            value: "3",
+            pct: "50%",
+            sub: "completion rate",
+            dark: false,
+          },
+          {
+            label: "Pending",
+            icon: "ti-clock",
+            value: "2",
+            pct: "↻",
+            sub: "awaiting fulfilment",
+            dark: true,
+          },
+        ].map((c, i) => (
+          <div key={i} className={`stat-card${c.dark ? " dark" : ""} anim-in`}>
+            <div className="stat-top">
+              <div className="stat-label">{c.label}</div>
+              <div className={`stat-icon-box${c.dark ? " dark-icon" : ""}`}>
+                <i className={`ti ${c.icon}`} />
+              </div>
+            </div>
+            <div className="stat-value">{c.value}</div>
+            <div className="stat-change">
+              <span className="change-pct up">{c.pct}</span> {c.sub}
             </div>
           </div>
-          <div className="stat-value">6</div>
-          <div className="stat-change">
-            <span className="change-pct up">+1.18%</span> from last month
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-top">
-            <div className="stat-label">Completed</div>
-            <div className="stat-icon-box">
-              <i className="ti ti-check" />
-            </div>
-          </div>
-          <div className="stat-value">3</div>
-          <div className="stat-change">
-            <span className="change-pct up">50%</span> completion rate
-          </div>
-        </div>
-        <div className="stat-card dark">
-          <div className="stat-top">
-            <div className="stat-label">Pending</div>
-            <div className="stat-icon-box dark-icon">
-              <i className="ti ti-clock" />
-            </div>
-          </div>
-          <div className="stat-value">2</div>
-          <div className="stat-change" style={{ color: "#EF9F27" }}>
-            Awaiting fulfilment
-          </div>
-        </div>
+        ))}
       </div>
-      <div className="orders-card">
+      <div className="orders-card anim-in">
         <div className="card-header">
           <span className="card-title">All Orders</span>
           <div className="table-actions">
@@ -870,50 +1274,40 @@ function OrdersSection() {
             </button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Order ID</th>
-              <th>Product</th>
-              <th>Order Date</th>
-              <th>Price</th>
-              <th>Payment</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ORDERS.map((o) => (
-              <tr key={o.id}>
-                <td className="order-id">{o.id}</td>
-                <td>{o.product}</td>
-                <td style={{ color: "#9e9e9a" }}>{o.date}</td>
-                <td>{o.price}</td>
-                <td>{o.payment}</td>
-                <td>
-                  <span
-                    className={clsx(
-                      "status-txt",
-                      o.status === "Delivered"
-                        ? "delivered"
-                        : o.status === "Completed"
-                          ? "completed"
-                          : o.status === "Pending"
-                            ? "pending"
-                            : "cancelled",
-                    )}>
-                    {o.status}
-                  </span>
-                </td>
-                <td>
-                  <button className="more-btn">
-                    <i className="ti ti-dots" />
-                  </button>
-                </td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Product</th>
+                <th>Date</th>
+                <th>Price</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ORDERS.map((o) => (
+                <tr key={o.id}>
+                  <td className="order-id">{o.id}</td>
+                  <td>{o.product}</td>
+                  <td style={{ color: "var(--text-2)" }}>{o.date}</td>
+                  <td style={{ fontWeight: 500 }}>{o.price}</td>
+                  <td>{o.payment}</td>
+                  <td>
+                    <StatusBadge status={o.status} />
+                  </td>
+                  <td>
+                    <button className="more-btn">
+                      <i className="ti ti-dots" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -922,11 +1316,11 @@ function OrdersSection() {
 function ShipmentSection() {
   return (
     <>
-      <div className="ov-heading">
+      <div className="ov-heading anim-in">
         <h1 className="ov-title">Shipments</h1>
         <p className="ov-sub">Monitor delivery status and tracking</p>
       </div>
-      <div className="orders-card">
+      <div className="orders-card anim-in">
         <div className="card-header">
           <span className="card-title">All Shipments</span>
           <div className="table-actions">
@@ -938,46 +1332,41 @@ function ShipmentSection() {
             </button>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Shipment ID</th>
-              <th>Order</th>
-              <th>Carrier</th>
-              <th>Tracking No.</th>
-              <th>Status</th>
-              <th>ETA</th>
-            </tr>
-          </thead>
-          <tbody>
-            {SHIPMENTS.map((s) => (
-              <tr key={s.id}>
-                <td>{s.id}</td>
-                <td style={{ color: "#9e9e9a" }}>{s.order}</td>
-                <td>{s.carrier}</td>
-                <td style={{ fontFamily: "monospace", fontSize: 12 }}>
-                  {s.tracking}
-                </td>
-                <td>
-                  <span
-                    className={clsx(
-                      "status-txt",
-                      s.status === "Delivered"
-                        ? "delivered"
-                        : s.status === "Pending"
-                          ? "pending"
-                          : s.status === "In Transit"
-                            ? "completed"
-                            : "cancelled",
-                    )}>
-                    {s.status}
-                  </span>
-                </td>
-                <td>{s.eta}</td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Shipment ID</th>
+                <th>Order</th>
+                <th>Carrier</th>
+                <th>Tracking</th>
+                <th>Status</th>
+                <th>ETA</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {SHIPMENTS.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.id}</td>
+                  <td style={{ color: "var(--text-2)" }}>{s.order}</td>
+                  <td>{s.carrier}</td>
+                  <td
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: 12,
+                      color: "var(--text-2)",
+                    }}>
+                    {s.tracking}
+                  </td>
+                  <td>
+                    <StatusBadge status={s.status} />
+                  </td>
+                  <td>{s.eta}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -994,11 +1383,11 @@ function PlaceholderSection({
 }) {
   return (
     <>
-      <div className="ov-heading">
+      <div className="ov-heading anim-in">
         <h1 className="ov-title">{title}</h1>
         <p className="ov-sub">{sub}</p>
       </div>
-      <div className="placeholder-section">
+      <div className="placeholder-section anim-in">
         <div className="placeholder-icon">
           <i className={`ti ${icon}`} />
         </div>
@@ -1009,11 +1398,15 @@ function PlaceholderSection({
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
+// ─── App ──────────────────────────────────────────────────────────────────────
 export default function OverviewPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState<Page>("overview");
+
+  const navigate = useCallback((page: Page) => {
+    setActivePage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   function renderSection() {
     switch (activePage) {
@@ -1063,17 +1456,34 @@ export default function OverviewPage() {
   }
 
   return (
-    <div className="shell">
-      <Sidebar
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        activePage={activePage}
-        onNavigate={setActivePage}
-      />
-      <div className="page-wrapper">
-        <Header onMenuClick={() => setSidebarOpen(true)} />
-        <main className="main">{renderSection()}</main>
+    <>
+      <style>{STYLES}</style>
+      <div className="shell">
+        <Sidebar
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          activePage={activePage}
+          onNavigate={navigate}
+        />
+        <div className="page-wrapper">
+          <Header onMenuClick={() => setSidebarOpen(true)} />
+          <main className="main">{renderSection()}</main>
+        </div>
       </div>
-    </div>
+      {/* Mobile bottom nav */}
+      <nav className="mobile-bottom-nav">
+        <div className="mobile-bottom-nav-inner">
+          {MOB_NAV.map(({ id, icon, label }) => (
+            <button
+              key={id}
+              className={`mob-nav-btn${activePage === id ? " active" : ""}`}
+              onClick={() => navigate(id)}>
+              <i className={`ti ${icon}`} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+    </>
   );
 }
