@@ -50,21 +50,21 @@ const TOP_PRODUCTS = [
     sales: "12,429 Sales",
     stock: "132 stocks remaining",
     available: true,
-    img: "/rednike.webp",
+    img: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=64&h=64&fit=crop",
   },
   {
     name: "Jaket Utilitas (Denim)",
     sales: "11,021 Sales",
     stock: "92 stocks remaining",
     available: true,
-    img: "/denim.avif",
+    img: "https://images.unsplash.com/photo-1544642899-f0d6e5f6ed6f?w=64&h=64&fit=crop",
   },
   {
     name: "605's Black Shirt Limited Edition",
     sales: "10,321 Sales",
     stock: "72 stocks remaining",
     available: true,
-    img: "/black.avif",
+    img: "https://images.unsplash.com/photo-1503341504253-dff4815485f1?w=64&h=64&fit=crop",
   },
 ];
 
@@ -279,39 +279,6 @@ const NAV_SETTINGS: { id: Page; icon: string; label: string }[] = [
   { id: "help", icon: "ti-help-circle", label: "Help & Support" },
 ];
 
-const PAGE_META: Record<Page, { title: string; subtitle: string }> = {
-  overview: {
-    title: "Overview",
-    subtitle: "Here's your current sales overview",
-  },
-  products: { title: "Products", subtitle: "Manage your product catalogue" },
-  customer: {
-    title: "Customers",
-    subtitle: "View and manage your customer base",
-  },
-  orders: { title: "Orders", subtitle: "Track and manage all customer orders" },
-  shipment: {
-    title: "Shipments",
-    subtitle: "Monitor delivery status and tracking",
-  },
-  store: {
-    title: "Store Settings",
-    subtitle: "Configure your store preferences and details",
-  },
-  partner: {
-    title: "Platform Partner",
-    subtitle: "Manage partner integrations and affiliate links",
-  },
-  feedback: {
-    title: "Feedback",
-    subtitle: "Review customer feedback and product reviews",
-  },
-  help: {
-    title: "Help & Support",
-    subtitle: "Browse documentation or contact our support team",
-  },
-};
-
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 function Header({ onMenuClick }: { onMenuClick: () => void }) {
@@ -348,11 +315,11 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
           <img
             className="user-avatar-img"
             src="https://i.pravatar.cc/40?img=11"
-            alt="Abosede's Jewel"
+            alt="Cooper Vaccaro"
           />
           <div>
             <div className="user-name">Abosede's Jewel</div>
-            <div className="user-email">ajewel77@gmail.com</div>
+            <div className="user-email">ajewel@gmail.com</div>
           </div>
           <i className="ti ti-chevron-down" style={{ fontSize: 14 }} />
         </div>
@@ -506,11 +473,7 @@ function SalesChart() {
             ticks: {
               color: "#9e9e9a",
               font: { size: 11 },
-              callback: (v) => {
-                const num = Number(v);
-                if (isNaN(num)) return "$0K";
-                return `$${(num / 1000).toFixed(0)}K`;
-              },
+              callback: (v) => "$" + (Number(v) / 1000).toFixed(0) + "K",
             },
             border: { display: false },
           },
