@@ -19,7 +19,7 @@ export default function TopProducts() {
 
       {TOP_PRODUCTS.map((p) => (
         <div className="product-item" key={p.name}>
-          <div className="product-img">{p.emoji}</div>
+          {/* <div className="product-img">{p.emoji}</div>
           <div className="product-info">
             <div className="product-name">{p.name}</div>
             <div className="product-sales">{p.sales} Sales</div>
@@ -35,7 +35,7 @@ export default function TopProducts() {
               </div>
             )}
             <div className="product-stock">{p.stock} stocks remaining</div>
-          </div>
+          </div> */}
         </div>
       ))}
     </div>
